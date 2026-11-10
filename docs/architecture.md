@@ -96,3 +96,24 @@ each step. Module 3 teaches it to answer from the customer documents.
 | Instructions | `lib/copper/assistant/instructions.ts` | `COPPER_INSTRUCTIONS`. Copper says it can't help yet with warranty, setup, troubleshooting or privacy |
 | Data | `lib/copper/inventory.ts`, `lib/copper/documents.ts` | Stock from `lib/copper/data/inventory.json`; `DOCUMENTS`: the four customer documents and their PDF paths under `public/docs/`. The PDFs are added in class |
 | AI calls | `{ module: 2, feature: "ask-copper" }` | One streamed call per question |
+
+## Module 3: Ask Copper answers from the customer documents
+
+**Summary:** Ask Copper has a fifth tool, `search_documents`. It finds the
+passages of the customer PDFs closest in meaning to a question, and Copper
+answers from them and names the document and page. This is retrieval: the PDFs
+are cut into page-sized passages, each is turned into an embedding (a list of
+numbers that captures its meaning), and a question is matched to the passages
+whose numbers are closest.
+
+| Piece | Where | What it does |
+|---|---|---|
+| Search | `lib/copper/assistant/search-documents.ts` | `searchDocuments(question)`: reads each PDF in `public/docs/` page by page (with `unpdf`), embeds the passages once on the first question and keeps them in memory, then ranks them against the question by cosine similarity and returns the top 4 with document name and page. Returns `no_documents` if the PDFs aren't there and `unavailable` if the model call fails, never an error |
+| Tool | `lib/copper/assistant/tools.ts` | `search_documents`, the fifth entry in `copperTools` |
+| Instructions | `lib/copper/assistant/instructions.ts` | Copper uses `search_documents` for setup, returns, warranty, privacy, terms and plan questions, answers only from the passages, cites the document and page, and says so when the documents don't answer |
+| Embedding call | `lib/ai/call.ts`, `lib/ai/models.ts` | `callEmbed()` wraps `embedMany` so embedding calls are logged to `ai_calls` like every other call; the model is `EMBEDDING_MODEL` (`gemini-embedding-001`) |
+| Panel | `components/copper/ask-copper.tsx` | Shows each returned passage with its document and page |
+| AI calls | `{ module: 3, feature: "index-documents" }`, `{ module: 3, feature: "search-documents" }` | One embedding call to index the PDFs (once per server start), one per question |
+
+The PDFs themselves are not in the repo: they are added to `public/docs/` in
+class, named after each document's id in `lib/copper/documents.ts`.

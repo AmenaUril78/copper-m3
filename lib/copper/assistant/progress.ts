@@ -39,4 +39,5 @@ export const TOOL_LABELS: Record<string, string> = {
   get_prices: "Looking up prices",
   calculate_cost: "Working out the cost",
   check_availability: "Checking stock",
+  search_documents: "Searching the documents",
 };

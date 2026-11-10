@@ -1,7 +1,12 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { generateText, Output, streamText } from "ai";
+import { embedMany, generateText, Output, streamText } from "ai";
 import type { z } from "zod";
-import { defaultModel, MODELS, type ModelId } from "@/lib/ai/models";
+import {
+  defaultModel,
+  EMBEDDING_MODEL,
+  MODELS,
+  type ModelId,
+} from "@/lib/ai/models";
 import { costUsd } from "@/lib/ai/pricing";
 
 // Every model call in the app goes through this file, so each one is logged
@@ -36,7 +41,7 @@ type TextOptions = DistributiveOmit<
 export type AiCallRow = {
   module: number;
   feature: string;
-  model: ModelId;
+  model: ModelId | typeof EMBEDDING_MODEL.id;
   input_tokens: number | null;
   output_tokens: number | null;
   cost_usd: number | null;
@@ -45,15 +50,19 @@ export type AiCallRow = {
   created_at: string;
 };
 
-function languageModel(model: ModelId) {
+function googleProvider() {
   const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
   if (!googleKey) throw new AiNotConfiguredError();
+  return createGoogleGenerativeAI({ apiKey: googleKey });
+}
+
+function languageModel(model: ModelId) {
   const entry = MODELS.find((m) => m.id === model);
   const id =
     entry && "googleId" in entry
       ? entry.googleId
       : model.slice("google/".length);
-  return createGoogleGenerativeAI({ apiKey: googleKey })(id);
+  return googleProvider()(id);
 }
 
 /** Prints one line per model call, so the cost and time are visible. */
@@ -145,6 +154,44 @@ export function callStream(info: CallInfo, options: StreamOptions) {
     onFinish: ({ totalUsage }) => logCall(row(true, totalUsage)),
     onError: () => logCall(row(false)),
   });
+}
+
+/**
+ * Turns pieces of text into embeddings: lists of numbers that capture meaning,
+ * so two passages about the same thing end up with similar numbers. Read the
+ * lists from `result.embeddings`, in the same order as `values`. Logged to
+ * ai_calls like every other call (an embedding model only reads text, so there
+ * are input tokens but no output tokens and no cost estimate).
+ * Example: callEmbed({ module: 3, feature: "search-documents" }, { values })
+ */
+export async function callEmbed(
+  info: Omit<CallInfo, "model">,
+  { values }: { values: string[] },
+) {
+  const started = performance.now();
+  const log = (ok: boolean, tokens: number | null) =>
+    logCall({
+      module: info.module,
+      feature: info.feature,
+      model: EMBEDDING_MODEL.id,
+      input_tokens: tokens,
+      output_tokens: null,
+      cost_usd: null,
+      latency_ms: Math.round(performance.now() - started),
+      ok,
+      created_at: new Date().toISOString(),
+    });
+  try {
+    const result = await embedMany({
+      model: googleProvider().embedding(EMBEDDING_MODEL.googleId),
+      values,
+    });
+    await log(true, result.usage.tokens);
+    return result;
+  } catch (error) {
+    if (!(error instanceof AiNotConfiguredError)) await log(false, null);
+    throw error;
+  }
 }
 
 // Asking for some thinking (rather than letting the model decide) is what

@@ -605,6 +605,24 @@ function ToolOutput({ name, output }: { name: string; output: any }) {
       </div>
     );
   }
+  if (name === "search_documents" && output?.status) {
+    if (output.status !== "ok")
+      return <p className="text-xs">{output.message}</p>;
+    return (
+      <ul className="space-y-2 text-xs">
+        {output.passages.map((p: any) => (
+          <li key={`${p.document}-${p.page}-${p.text.slice(0, 24)}`}>
+            <p className="font-semibold">
+              {p.document}, page {p.page}
+            </p>
+            <p className="text-muted-foreground">
+              {p.text.length > 140 ? `${p.text.slice(0, 140)}…` : p.text}
+            </p>
+          </li>
+        ))}
+      </ul>
+    );
+  }
   // A tool without its own layout yet: show what came back as plain text.
   return (
     <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">
