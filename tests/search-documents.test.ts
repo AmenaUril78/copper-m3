@@ -208,5 +208,9 @@ describe("the search_documents tool", () => {
     expect(TOOL_LABELS.search_documents).toBeTruthy();
     expect(COPPER_INSTRUCTIONS).toContain("search_documents");
     expect(COPPER_INSTRUCTIONS).toMatch(/page/i);
+    // Questions the documents don't cover get an honest "couldn't find it".
+    expect(COPPER_INSTRUCTIONS).toContain(
+      "I couldn't find that in the support documents.",
+    );
   });
 });
